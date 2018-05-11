@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+
+# Louisa Katlubeck
+# Program 1 CS 372
+# The testing machine was flip 1
+# Description: chatserve is a chat server that communicates with chatclient until one person enters
+# \quit to end the chat session
+# If \quit is entered, chatserve opens a new chat session until a SIGINT is received
+# The port is specified on the command line
+# chatserve will be run on the server flip1.oregonstate.edu (flip1)
+# The following sources consulted and/or code borrowed from:
+# https://docs.python.org/3.4/howto/sockets.html, lecture 15 CS 372 Spring 2018 OSU,
+# https://stackoverflow.com/questions/1112343/how-do-i-capture-sigint-in-python, 
+# https://www.binarytides.com/python-socket-server-code-example/,
+# https://stackoverflow.com/questions/43561814/c-server-client-communication-via-socket-how-to-print-message-from-server-to-c
+
+
+
+# initial setup
+from socket import *
+import signal
+import sys
+
+#################################################################
+# description: startServer creates a socket and binds it to the host and port
+# receives: the system, port, and host
+# returns: a socket
+#################################################################
+def startServer (sys, port, host):
+	# create the socket
+	s = socket(AF_INET, SOCK_STREAM)
+	print 'Socket created'
+	 
+	# bind socket to local host and port
+	s.bind((host, port))   
+	print 'Socket bind complete'
+	return s
+
+	
+#################################################################
+# description: serverConnect listens on the open socket, then waits for and accepts
+# a connection from the client
+# receives: a socket
+# returns: a connection and address
+#################################################################
+def serverConnect (s):
+	# start listening on socket
+	s.listen(10)
+	print 'Socket now listening'
+			
+	# wait to accept a connection from the client
+	conn, addr = s.accept()
+	print 'Connected with ' + addr[0] + ':' + str(addr[1])
+	
+	return (conn, addr)
+
+
+#################################################################
+# description: receiveMessage gets and prints the message the server received from the client
+# receives: the connection and system
+# returns: 0 if the client has closed the connection, otherwise 1 if a message was successfully received
+#################################################################
+def receiveMessage (conn, sys):
+	data = conn.recv(1024)
+	print str(data)
+				
+	# flush the data
+	sys.stdout.flush()
+	
+	#print str(data).startswith("The client has closed the connection")
+	if str(data).startswith("The client has closed the connection"):
+		return 0
+	
+	else:
+		return 1
+	
+	
+#################################################################
+# description: sendMessage sends a message from the server to the client
+# receives: the connection, handle, and system
+# returns: 0 or 1 depending on if the data sent (1) or error (0)
+#################################################################
+def sendMessage (conn, handle, sys):
+	data = handle
+	data += raw_input(handle)
+				
+	if str(data) == handle+"\quit":
+		print 'The server has closed the connection'
+		conn.sendall('The server has closed the connection')
+		return 0
+				
+	elif data:
+		conn.sendall(data)
+		sys.stdout.flush()
+		return 1
+
+	
+#################################################################
+# main part of the program
+#################################################################
+# variable setup
+outer = 1
+inner = 1
+
+# serverName = 'servername'
+host = ''
+
+# server handle
+handle = 'Server> '
+
+# talking with the client - do this until SIGINT
+try:	
+	# get the port number
+	port = int(sys.argv[1])
+	
+	# start the server
+	s = startServer(sys, port, host) 
+		
+	# outer loop to listen for a connection from the client
+	# will go back to this outer loop from the inner loop upon \quit
+	while (outer == 1):
+		# make sure to do the inner loop
+		inner = 1
+		fromClient = 1
+			
+		# wait to accept a connection from the client
+		conn, addr = serverConnect(s)
+			
+		# receive the data 
+		# do this until SIGINT
+		while inner:
+			# print the message from the client
+			fromClient = receiveMessage(conn, sys)
+				
+			# get data to send to the client
+			if fromClient:
+				inner = sendMessage(conn, handle, sys)
+			
+			else:
+				inner = 0
+			
+# close the connection on a SIGINT
+except KeyboardInterrupt:
+	print '\nYou pressed Ctrl+C, closing the connection'
+	conn.sendall('The server has ended the connection')
+	s.close()
+	sys.exit(0)
